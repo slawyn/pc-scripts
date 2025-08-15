@@ -1,0 +1,7 @@
+{
+    "files.associations": {
+        "stm32f4xx_qspi.h": "c",
+        "stm32f4xx.h": "c"
+    },
+    "memory-view.showMemoryPanel": true
+}

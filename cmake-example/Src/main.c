@@ -95,13 +95,13 @@ static void vHardwareInitialize()
   USART_Init(UART_PERIPHERIE, &pxUartInitConfig);
 }
 
-static void vTracerSend(uint32_t ui32Data)
+static void vTrace(uint32_t ui32Data)
 {
   if (((ITM->TCR & ITM_TCR_ITMENA_Msk) != 0u) &&
       ((ITM->TER & 1u) != 0u) &&
       (ITM->PORT[0].u32 != 0u))
   {
-    ITM->PORT[0].u8 = (uint8_t)ui32Data;
+    ITM->PORT[0].u32 = (ui32Data);
   }
 }
 
@@ -133,26 +133,10 @@ int main(void)
   for (;;)
   {
     uint32_t ulNow = DWT->CYCCNT;
-    if ((uint32_t)(ulNow - ulLastTraceCycle) >= (ulCyclesPerMs) * 10)
+    if ((uint32_t)(ulNow - ulLastTraceCycle) >= (ulCyclesPerMs))
     {
       ulLastTraceCycle += ulCyclesPerMs;
-      static uint8_t ui8TraceLetter = 0u;
-      switch (ui8TraceLetter)
-      {
-      case 0u:
-        vTracerSend('A');
-        break;
-      case 1u:
-        vTracerSend('B');
-        break;
-      case 2u:
-        vTracerSend('C');
-        break;
-      default:
-        vTracerSend('D');
-        break;
-      }
-      ui8TraceLetter = (ui8TraceLetter + 1u) % 4u;
+      vTrace(ulNow);
     }
 
     if (USART_GetFlagStatus(UART_PERIPHERIE, USART_FLAG_RXNE) == SET)

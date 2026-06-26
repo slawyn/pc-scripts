@@ -22,78 +22,99 @@
 #include "stm32f4xx.h"
 #include "system_stm32f4xx.h"
 
-
 static void vDoNothing(void)
-{ 
+{
   uint8_t a;
   (void)a;
 }
 
 #if !defined(__SOFT_FP__) && defined(__ARM_FP)
-  #warning "FPU is not initialized, but the project is compiling for an FPU. Please initialize the FPU before use."
+#warning "FPU is not initialized, but the project is compiling for an FPU. Please initialize the FPU before use."
 #endif
 
-#define UART_PERIPHERAL_CLOCK   RCC_APB1Periph_USART2
-#define UART_PERIPHERIE         USART2
-#define UART_GPIO_AF_CONFIG		  GPIO_AF_USART2
-#define GPIO_PERIPHERAL_CLOCK   RCC_AHB1Periph_GPIOA
-#define UART_GPIO_PORT          GPIOA
-#define UART_GPIO_PORT_PIN0     GPIO_Pin_2
-#define UART_GPIO_PORT_PIN1     GPIO_Pin_3
-#define UART_GPIO_AF_SOURCE0	  GPIO_PinSource2
-#define UART_GPIO_AF_SOURCE1	  GPIO_PinSource3
+#define UART_PERIPHERAL_CLOCK RCC_APB1Periph_USART2
+#define UART_PERIPHERIE USART2
+#define UART_GPIO_AF_CONFIG GPIO_AF_USART2
+#define GPIO_PERIPHERAL_CLOCK RCC_AHB1Periph_GPIOA
+#define UART_GPIO_PORT GPIOA
+#define UART_GPIO_PORT_PIN0 GPIO_Pin_2
+#define UART_GPIO_PORT_PIN1 GPIO_Pin_3
+#define UART_GPIO_AF_SOURCE0 GPIO_PinSource2
+#define UART_GPIO_AF_SOURCE1 GPIO_PinSource3
 
 typedef void (*pFunctionPointer)(void);
 volatile extern void AsmDumper(void);
 
-
 pFunctionPointer pCallback = vDoNothing;
+
+static void vTraceInitialize(void)
+{
+  CoreDebug->DEMCR |= CoreDebug_DEMCR_TRCENA_Msk;
+  DWT->CYCCNT = 0u;
+  DWT->CTRL |= DWT_CTRL_CYCCNTENA_Msk;
+
+  ITM->LAR = 0xC5ACCE55u;
+  ITM->TER = 1u;
+  ITM->TPR = 0u;
+  ITM->TCR = ITM_TCR_ITMENA_Msk | ITM_TCR_DWTENA_Msk;
+}
 
 static void vHardwareInitialize()
 {
-   // Init Clocks
-   RCC_PCLK1Config(RCC_SYSCLK_Div1);
-   RCC_PCLK2Config(RCC_SYSCLK_Div1);
+  // Init Clocks
+  RCC_PCLK1Config(RCC_SYSCLK_Div1);
+  RCC_PCLK2Config(RCC_SYSCLK_Div1);
 
-   /* Configure SysTick to generate an interrupt every millisecond */
-   //mErrorLoop(SysTick_Config(SystemCoreClock / 1000) != 0);
+  /* Configure SysTick to generate an interrupt every millisecond */
+  // mErrorLoop(SysTick_Config(SystemCoreClock / 1000) != 0);
 
-   // Init GPIOA
-   RCC_AHB1PeriphClockCmd(GPIO_PERIPHERAL_CLOCK, ENABLE);
-   GPIO_InitTypeDef pxGpioInitConfig;
-   pxGpioInitConfig.GPIO_Mode  = GPIO_Mode_AF;
-   pxGpioInitConfig.GPIO_Pin   = UART_GPIO_PORT_PIN0 | UART_GPIO_PORT_PIN1;
-   pxGpioInitConfig.GPIO_PuPd  = GPIO_PuPd_DOWN;
-   pxGpioInitConfig.GPIO_Speed = GPIO_Fast_Speed;
+  // Init GPIOA
+  RCC_AHB1PeriphClockCmd(GPIO_PERIPHERAL_CLOCK, ENABLE);
+  GPIO_InitTypeDef pxGpioInitConfig;
+  pxGpioInitConfig.GPIO_Mode = GPIO_Mode_AF;
+  pxGpioInitConfig.GPIO_Pin = UART_GPIO_PORT_PIN0 | UART_GPIO_PORT_PIN1;
+  pxGpioInitConfig.GPIO_PuPd = GPIO_PuPd_DOWN;
+  pxGpioInitConfig.GPIO_Speed = GPIO_Fast_Speed;
 
-   GPIO_Init(UART_GPIO_PORT, &pxGpioInitConfig);
-   GPIO_PinAFConfig(UART_GPIO_PORT, UART_GPIO_AF_SOURCE0, UART_GPIO_AF_CONFIG);
-   GPIO_PinAFConfig(UART_GPIO_PORT, UART_GPIO_AF_SOURCE1, UART_GPIO_AF_CONFIG);
+  GPIO_Init(UART_GPIO_PORT, &pxGpioInitConfig);
+  GPIO_PinAFConfig(UART_GPIO_PORT, UART_GPIO_AF_SOURCE0, UART_GPIO_AF_CONFIG);
+  GPIO_PinAFConfig(UART_GPIO_PORT, UART_GPIO_AF_SOURCE1, UART_GPIO_AF_CONFIG);
 
-   // Init Peripherals
-   RCC_APB1PeriphClockCmd(UART_PERIPHERAL_CLOCK, ENABLE);
-   USART_Cmd(UART_PERIPHERIE, ENABLE);
+  // Init Peripherals
+  RCC_APB1PeriphClockCmd(UART_PERIPHERAL_CLOCK, ENABLE);
+  USART_Cmd(UART_PERIPHERIE, ENABLE);
 
-   USART_InitTypeDef pxUartInitConfig;
-   pxUartInitConfig.USART_BaudRate            = 512000;
-   pxUartInitConfig.USART_WordLength          = USART_WordLength_8b;
-   pxUartInitConfig.USART_HardwareFlowControl = USART_HardwareFlowControl_None;
-   pxUartInitConfig.USART_StopBits            = USART_StopBits_2;
-   pxUartInitConfig.USART_Parity = USART_Parity_No;
-   pxUartInitConfig.USART_Mode   = USART_Mode_Tx | USART_Mode_Rx;
+  USART_InitTypeDef pxUartInitConfig;
+  pxUartInitConfig.USART_BaudRate = 512000;
+  pxUartInitConfig.USART_WordLength = USART_WordLength_8b;
+  pxUartInitConfig.USART_HardwareFlowControl = USART_HardwareFlowControl_None;
+  pxUartInitConfig.USART_StopBits = USART_StopBits_2;
+  pxUartInitConfig.USART_Parity = USART_Parity_No;
+  pxUartInitConfig.USART_Mode = USART_Mode_Tx | USART_Mode_Rx;
 
-   USART_Init(UART_PERIPHERIE, &pxUartInitConfig);
+  USART_Init(UART_PERIPHERIE, &pxUartInitConfig);
+}
+
+static void vTracerSend(uint32_t ui32Data)
+{
+  if (((ITM->TCR & ITM_TCR_ITMENA_Msk) != 0u) &&
+      ((ITM->TER & 1u) != 0u) &&
+      (ITM->PORT[0].u32 != 0u))
+  {
+    ITM->PORT[0].u8 = (uint8_t)ui32Data;
+  }
 }
 
 int main(void)
 {
 #if (__FPU_PRESENT == 1) && (__FPU_USED == 1)
-    SCB->CPACR |= ((3UL << 10*2)|(3UL << 11*2));  /* set CP10 and CP11 Full Access */
+  SCB->CPACR |= ((3UL << 10 * 2) | (3UL << 11 * 2)); /* set CP10 and CP11 Full Access */
 #endif
 
   vHardwareInitialize();
-  
-    /* Loop forever */
+  vTraceInitialize();
+
+  /* Loop forever */
   char sLog[] = "Starting::";
 
   const uint8_t SYNC = 0x9A;
@@ -104,72 +125,107 @@ int main(void)
   uint8_t ui8RxIndexMode = 0u;
   uint8_t ui8RxIndex = 0u;
 
+  uint32_t ui32Timeout = 0u;
   const uint8_t rui8TransmitBufferConnect[] = {0x9a, 0x08, 0xff, 0x05, 0x80, 0x13, 0x83, 0x00, 0x01, 0x01, 0x1c};
   const uint8_t rui8TransmitBufferMode[] = {0x9a, 0x08, 0xff, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x09, 0x08};
-  uint32_t ui32Timeout = 0u;
-  for(;;)
+  const uint32_t ulCyclesPerMs = SystemCoreClock / 1000u;
+  uint32_t ulLastTraceCycle = DWT->CYCCNT;
+  for (;;)
   {
-	  if(USART_GetFlagStatus(UART_PERIPHERIE, USART_FLAG_RXNE) == SET)
-	  {
-		  ui32Timeout = 100000u;
-		  uint16_t ui16Rdata = USART_ReceiveData(UART_PERIPHERIE);
-		  USART_SendData(UART_PERIPHERIE, ui16Rdata);
+    uint32_t ulNow = DWT->CYCCNT;
+    if ((uint32_t)(ulNow - ulLastTraceCycle) >= (ulCyclesPerMs) * 10)
+    {
+      ulLastTraceCycle += ulCyclesPerMs;
+      static uint8_t ui8TraceLetter = 0u;
+      switch (ui8TraceLetter)
+      {
+      case 0u:
+        vTracerSend('A');
+        break;
+      case 1u:
+        vTracerSend('B');
+        break;
+      case 2u:
+        vTracerSend('C');
+        break;
+      default:
+        vTracerSend('D');
+        break;
+      }
+      ui8TraceLetter = (ui8TraceLetter + 1u) % 4u;
+    }
 
-		  if(ui16Rdata == SYNC){
-			  ui8RxIndexConnect = 0;
-			  ui8RxIndexMode = 0;
-			  ui8RxIndex = 0;
-			  synced = 1u;
-		  }
-		  else
-		  {
-			  ++ui8RxIndex;
-		  }
+    if (USART_GetFlagStatus(UART_PERIPHERIE, USART_FLAG_RXNE) == SET)
+    {
+      ui32Timeout = 100000u;
+      uint16_t ui16Rdata = USART_ReceiveData(UART_PERIPHERIE);
+      USART_SendData(UART_PERIPHERIE, ui16Rdata);
 
-		  if(synced)
-		  {
-			  if(ui8RxIndex < sizeof(rui8ReceiveBufferConnect) && rui8ReceiveBufferConnect[ui8RxIndex] == ui16Rdata){
-				  ++ui8RxIndexConnect;
-			  }
-			  if(ui8RxIndex < sizeof(rui8ReceiveBufferMode) && rui8ReceiveBufferMode[ui8RxIndex] == ui16Rdata){
-				  ++ui8RxIndexMode;
-			  }
+      if (ui16Rdata == SYNC)
+      {
+        ui8RxIndexConnect = 0;
+        ui8RxIndexMode = 0;
+        ui8RxIndex = 0;
+        synced = 1u;
+      }
+      else
+      {
+        ++ui8RxIndex;
+      }
 
-			 // Transmit and reset
-			  if(sizeof(rui8ReceiveBufferConnect) == ui8RxIndexConnect){
-				  for(uint8_t idx = 0; idx<sizeof(rui8TransmitBufferConnect);++idx)
-				  {
-					while(USART_GetFlagStatus(UART_PERIPHERIE, USART_FLAG_TXE) != SET){};
-					USART_SendData(UART_PERIPHERIE, rui8TransmitBufferConnect[idx]);
-				  }
-			  }
-			  else if (sizeof(rui8ReceiveBufferMode) == ui8RxIndexMode){
-				  for(uint8_t idx = 0; idx<sizeof(rui8TransmitBufferMode);++idx)
-				  {
-					while(USART_GetFlagStatus(UART_PERIPHERIE, USART_FLAG_TXE) != SET){};
-					USART_SendData(UART_PERIPHERIE, rui8TransmitBufferMode[idx]);
-				  }
-			  }
-		  }
-	  }
+      if (synced)
+      {
+        if (ui8RxIndex < sizeof(rui8ReceiveBufferConnect) && rui8ReceiveBufferConnect[ui8RxIndex] == ui16Rdata)
+        {
+          ++ui8RxIndexConnect;
+        }
+        if (ui8RxIndex < sizeof(rui8ReceiveBufferMode) && rui8ReceiveBufferMode[ui8RxIndex] == ui16Rdata)
+        {
+          ++ui8RxIndexMode;
+        }
 
-	  if(ui32Timeout && --ui32Timeout == 0u)
-	  {
-		  ui8RxIndex = 0u;
-	  }
+        // Transmit and reset
+        if (sizeof(rui8ReceiveBufferConnect) == ui8RxIndexConnect)
+        {
+          for (uint8_t idx = 0; idx < sizeof(rui8TransmitBufferConnect); ++idx)
+          {
+            while (USART_GetFlagStatus(UART_PERIPHERIE, USART_FLAG_TXE) != SET)
+            {
+            };
+            USART_SendData(UART_PERIPHERIE, rui8TransmitBufferConnect[idx]);
+          }
+        }
+        else if (sizeof(rui8ReceiveBufferMode) == ui8RxIndexMode)
+        {
+          for (uint8_t idx = 0; idx < sizeof(rui8TransmitBufferMode); ++idx)
+          {
+            while (USART_GetFlagStatus(UART_PERIPHERIE, USART_FLAG_TXE) != SET)
+            {
+            };
+            USART_SendData(UART_PERIPHERIE, rui8TransmitBufferMode[idx]);
+          }
+        }
+      }
+    }
 
-	  /**/
+    if (ui32Timeout && --ui32Timeout == 0u)
+    {
+      ui8RxIndex = 0u;
+    }
 
+    /**/
   }
-	  for(uint8_t idx = 0; idx<sizeof(sLog);++idx)
-	  {
-		while(USART_GetFlagStatus(UART_PERIPHERIE, USART_FLAG_TXE) != SET){};
-		USART_SendData(UART_PERIPHERIE, sLog[idx]);
-	  }
-
+  for (uint8_t idx = 0; idx < sizeof(sLog); ++idx)
+  {
+    while (USART_GetFlagStatus(UART_PERIPHERIE, USART_FLAG_TXE) != SET)
+    {
+    };
+    USART_SendData(UART_PERIPHERIE, sLog[idx]);
+  }
 
   AsmDumper();
-  for(;;){
+  for (;;)
+  {
     pCallback();
   }
 }
